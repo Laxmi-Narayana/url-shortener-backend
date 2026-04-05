@@ -19,4 +19,10 @@ public class UrlMappingRequest {
     )
     private String originalUrl;
     private LocalDateTime expiresAt;
+
+    @Pattern(
+            regexp = "^[a-zA-Z0-9\\-]{3,20}",
+            message = "Custom alias must be 3-20 characters (letters, digits, hyphens only)"
+    )
+    private String customAlias;
 }

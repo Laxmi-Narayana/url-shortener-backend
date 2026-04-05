@@ -1,5 +1,6 @@
 package com.lucke.url_shortener.service.impl;
 
+import com.lucke.url_shortener.exception.AliasAlreadyExistsException;
 import com.lucke.url_shortener.exception.UrlExpiredException;
 import com.lucke.url_shortener.exception.UrlNotFoundException;
 import com.lucke.url_shortener.model.dto.UrlMappingDTO;
@@ -10,14 +11,18 @@ import com.lucke.url_shortener.service.UrlMappingService;
 import com.lucke.url_shortener.util.Base62Encoder;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UrlMappingServiceImpl implements UrlMappingService {
@@ -31,17 +36,21 @@ public class UrlMappingServiceImpl implements UrlMappingService {
     @Transactional
     @Cacheable(value = "urlCache", key = "#shortCode")
     public UrlMappingDTO getUrlMappingByShortCode(String shortCode) {
-        System.out.println("CACHE MISS — hitting DB for: " + shortCode);
+        log.debug("Cache Miss - fetching from DB for shortCode: {}", shortCode);
 
         UrlMapping urlMapping = urlMappingRepository.findByShortCode(shortCode)
                 .orElseThrow(() -> new UrlNotFoundException("short code doesn't exist"));
 
-        if (urlMapping.getExpiresAt() != null &&
-                urlMapping.getExpiresAt().isBefore(LocalDateTime.now())) {
+        if(isExpired(urlMapping)) {
             throw new UrlExpiredException("URL has expired");
         }
 
         return toDTO(urlMapping);
+    }
+
+    private boolean isExpired(UrlMapping urlMapping) {
+        return urlMapping.getExpiresAt() != null &&
+                urlMapping.getExpiresAt().isBefore(LocalDateTime.now());
     }
 
     private UrlMappingDTO toDTO(UrlMapping urlMapping) {
@@ -60,21 +69,36 @@ public class UrlMappingServiceImpl implements UrlMappingService {
     @CachePut(value = "urlCache", key = "#result.shortCode")
     public UrlMappingDTO createShortUrl(UrlMappingRequest request) {
 
+        String customAlias = request.getCustomAlias();
+
+        if(customAlias != null && !customAlias.isBlank()) {
+            if(urlMappingRepository.existsByShortCode(customAlias)) {
+                throw new AliasAlreadyExistsException("Alias '"+customAlias+"' is already taken");
+            }
+        }
+
         UrlMapping entity = new UrlMapping();
         entity.setOriginalUrl(request.getOriginalUrl());
-
         entity.setExpiresAt(
                 request.getExpiresAt()!=null
                         ? request.getExpiresAt()
                         : LocalDateTime.now().plusDays(30)
         );
+        entity.setCustomAlias(customAlias != null && !customAlias.isBlank());
+        if(customAlias != null && !customAlias.isBlank()) {
+            entity.setShortCode(customAlias);
+            urlMappingRepository.save(entity);
+        }
+        else {
+            UrlMapping saved = urlMappingRepository.save(entity);
+            String shortCode = Base62Encoder.encode(saved.getId());
+            saved.setShortCode(shortCode);
+            urlMappingRepository.save(saved);
+            entity = saved;
+        }
 
-        UrlMapping saved = urlMappingRepository.save(entity);
-        String shortCode = Base62Encoder.encode(saved.getId());
-        saved.setShortCode(shortCode);
-
-        urlMappingRepository.save(saved);
-        return toDTO(saved);
+        log.info("Created short URL: {} -> {}",entity.getShortCode(), entity.getOriginalUrl());
+        return toDTO(entity);
     }
 
     @Override
@@ -90,6 +114,12 @@ public class UrlMappingServiceImpl implements UrlMappingService {
         urlMappingRepository.findByShortCode(shortCode)
                 .ifPresent(urlMappingRepository::delete);
 
+    }
+
+    @Override
+    public Page<UrlMappingDTO> getAllUrls(int page, int size) {
+        return urlMappingRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page,size))
+                .map(this::toDTO);
     }
 
 }

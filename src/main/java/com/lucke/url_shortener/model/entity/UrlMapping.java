@@ -39,6 +39,9 @@ public class UrlMapping {
     @Column(name="click_count", nullable = false)
     private Long clickCount;
 
+    @Column(name = "custom_alias", nullable = false)
+    private boolean customAlias;
+
     @PrePersist
     public void onCreate() {
         this.createdAt = LocalDateTime.now();
