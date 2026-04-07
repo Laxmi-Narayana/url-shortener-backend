@@ -2,6 +2,7 @@ package com.lucke.url_shortener.controller;
 
 import com.lucke.url_shortener.model.dto.UrlMappingDTO;
 import com.lucke.url_shortener.model.request.UrlMappingRequest;
+import com.lucke.url_shortener.service.ClickCountService;
 import com.lucke.url_shortener.service.UrlMappingService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -18,18 +19,20 @@ import org.springframework.web.bind.annotation.*;
 public class UrlMappingController {
 
     private final UrlMappingService urlMappingService;
+    private final ClickCountService clickCountService;
 
     @GetMapping("/{shortCode}")
     public ResponseEntity<Void> redirect(@PathVariable String shortCode) {
         UrlMappingDTO urlMappingDTO = urlMappingService.getUrlMappingByShortCode(shortCode);
-        urlMappingService.incrementClickCount(shortCode);
+//        urlMappingService.incrementClickCount(shortCode);
+        clickCountService.increment(shortCode);
         return ResponseEntity.status(HttpStatus.FOUND)
-                .header("Location",urlMappingDTO.getOriginalUrl())
+                .header("Location", urlMappingDTO.getOriginalUrl())
                 .build();
     }
 
     @GetMapping("/urls/{shortCode}")
-    public ResponseEntity<UrlMappingDTO> getStats(@PathVariable String shortCode) {
+    public ResponseEntity<UrlMappingDTO> getUrl(@PathVariable String shortCode) {
         UrlMappingDTO dto = urlMappingService.getUrlMappingByShortCode(shortCode);
         return ResponseEntity.ok(dto);
     }
@@ -54,4 +57,10 @@ public class UrlMappingController {
         urlMappingService.deleteUrl(shortCode);
         return ResponseEntity.noContent().build(); // 204
     }
+
+    @GetMapping("/urls/{shortCode}/stats")
+    public ResponseEntity<UrlMappingDTO> getStats(@PathVariable String shortCode) {
+        return ResponseEntity.ok(urlMappingService.getStats(shortCode));
+    }
+
 }

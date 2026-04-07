@@ -7,6 +7,7 @@ import com.lucke.url_shortener.model.dto.UrlMappingDTO;
 import com.lucke.url_shortener.model.request.UrlMappingRequest;
 import com.lucke.url_shortener.model.entity.UrlMapping;
 import com.lucke.url_shortener.repository.UrlMappingRepository;
+import com.lucke.url_shortener.service.ClickCountService;
 import com.lucke.url_shortener.service.UrlMappingService;
 import com.lucke.url_shortener.util.Base62Encoder;
 import jakarta.transaction.Transactional;
@@ -31,6 +32,7 @@ public class UrlMappingServiceImpl implements UrlMappingService {
     private String baseUrl;
 
     private final UrlMappingRepository urlMappingRepository;
+    private final ClickCountService clickCountService;
 
     @Override
     @Transactional
@@ -122,4 +124,19 @@ public class UrlMappingServiceImpl implements UrlMappingService {
                 .map(this::toDTO);
     }
 
+    @Override
+    public UrlMappingDTO getStats(String shortCode) {
+        UrlMappingDTO cached = getUrlMappingByShortCode(shortCode); // uses cache
+        long buffered = clickCountService.getBufferedCount(shortCode);
+        long liveCount = cached.getClickCount() + buffered;
+
+        return UrlMappingDTO.builder()
+                .originalUrl(cached.getOriginalUrl())
+                .shortCode(cached.getShortCode())
+                .shortUrl(cached.getShortUrl())
+                .createdAt(cached.getCreatedAt())
+                .expiresAt(cached.getExpiresAt())
+                .clickCount(liveCount)   // real-time total
+                .build();
+    }
 }

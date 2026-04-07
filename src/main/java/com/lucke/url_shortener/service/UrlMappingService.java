@@ -12,4 +12,5 @@ public interface UrlMappingService {
     void incrementClickCount(@Param("shortCode") String shortCode);
     void deleteUrl(String shortCode);
     Page<UrlMappingDTO> getAllUrls(int page, int size);
+    UrlMappingDTO getStats(String shortCode);
 }

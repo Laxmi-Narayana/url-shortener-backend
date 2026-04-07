@@ -20,4 +20,8 @@ public interface UrlMappingRepository extends JpaRepository<UrlMapping, Long> {
     @Modifying
     @Query("update UrlMapping u set u.clickCount = u.clickCount + 1 where u.shortCode = :shortCode")
     void incrementClickCount(@Param("shortCode") String shortCode);
+
+    @Modifying
+    @Query("UPDATE UrlMapping u SET u.clickCount = u.clickCount + :delta WHERE u.shortCode = :shortCode")
+    void incrementClickCountBy(@Param("shortCode") String shortCode, @Param("delta") long delta);
 }
